@@ -8069,5 +8069,24 @@
         "detect_code": ["1703"],
         "macros_add": ["GD32E10X"],
         "release_versions": ["5"]
+    },
+    "XC7Z020": {
+        "inherits": ["Target"],
+        "core": "Cortex-M0",
+        "extra_labels": ["Xilinx"],
+        "OUTPUT_EXT": "hex",
+        "supported_toolchains": ["GCC_ARM", "ARM"],
+        "device_has": [
+            "PORTIN",
+            "PORTINOUT",
+            "PORTOUT",
+            "INTERRUPTIN",
+            "SERIAL"
+        ],
+        "device_name": "XC7Z020-1CSG484CES",
+        "macros": [
+            "MBED_FAULT_HANDLER_DISABLED",
+            "DEVICE_SERIAL_ASYNCH"
+        ]
     }
 }
