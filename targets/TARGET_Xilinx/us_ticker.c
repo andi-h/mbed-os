@@ -64,8 +64,8 @@ void us_ticker_fire_interrupt(void)
 const ticker_info_t *us_ticker_get_info(void)
 {
     static const ticker_info_t info = {
-        50e6 / 8,  // 50 MHz
-        16         // 16 Bit timer (24 Bit is not working)
+        100e6, // 100 MHz
+        16     // 16 Bit timer (24 Bit is not working)
     };
     return &info;
 }
