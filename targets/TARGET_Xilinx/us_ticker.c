@@ -21,44 +21,37 @@
 
 void us_ticker_init(void)
 {
-	uint32_t ticks = SystemCoreClock * 1e-2;
 
-  SysTick->LOAD  = (uint32_t)(ticks - 1UL);                         /* set reload register */
-  SysTick->VAL   = 0UL;                                             /* Load the SysTick Counter Value */
-  SysTick->CTRL  = SysTick_CTRL_CLKSOURCE_Msk |
-                   SysTick_CTRL_ENABLE_Msk;                         /* Enable SysTick Timer */
 }
 
 void us_ticker_free(void)
 {
-    us_ticker_disable_interrupt();
-    SysTick->VAL   = 0UL;                                       
-    SysTick->CTRL  = 0;
+
 }
 
 uint32_t us_ticker_read(void)
 {
-    return (uint32_t)(SysTick->VAL);
+	return 0;
 }
 
 void us_ticker_set_interrupt(timestamp_t timestamp)
 {
-    SysTick_Config(timestamp);
+
 }
 
 void us_ticker_disable_interrupt(void)
 {
-    NVIC_DisableIRQ(SysTick_IRQn);
+
 }
 
 void us_ticker_clear_interrupt(void)
 {
-    NVIC_ClearPendingIRQ(SysTick_IRQn);
+
 }
 
 void us_ticker_fire_interrupt(void)
 {
-    NVIC_SetPendingIRQ(SysTick_IRQn);
+
 }
 
 const ticker_info_t *us_ticker_get_info(void)

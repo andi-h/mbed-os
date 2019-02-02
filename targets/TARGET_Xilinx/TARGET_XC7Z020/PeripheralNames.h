@@ -35,6 +35,10 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+	
+typedef enum {
+    UART_0 = 0,
+} UARTName;
 
 #ifdef __cplusplus
 }

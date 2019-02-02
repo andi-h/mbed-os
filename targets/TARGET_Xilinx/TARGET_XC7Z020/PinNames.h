@@ -48,8 +48,8 @@ typedef enum {
     NC = (int)0xFFFFFFFF,
     USBTX       = 0x01,
     USBRX       = 0x02,
-    STDIO_UART_TX = 0x04,
-    STDIO_UART_RX = 0x05
+    STDIO_UART_TX = 0x04, // just a placeholder; routed in Vivado;
+    STDIO_UART_RX = 0x05  // just a placeholder; routed in Vivado;
 } PinName;
 
 typedef enum {

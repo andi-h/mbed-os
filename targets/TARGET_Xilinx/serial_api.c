@@ -31,10 +31,18 @@
 #if DEVICE_SERIAL
 
 #include "serial_api.h"
+#include "xuartlite.h"
+#include "xuartlite_l.h"
 #include <string.h>
 
+#define UART_BUFFER_SIZE 10
+
 int stdio_uart_inited = 0; // used in platform/mbed_board.c and platform/mbed_retarget.cpp
+uint8_t UARTReceiveBuffer[UART_BUFFER_SIZE];
 serial_t stdio_uart;
+
+void serial_tx_handler(void *CallBackRef, unsigned int EventData);
+void serial_rx_handler(void *CallBackRef, unsigned int EventData);
 
 /** Initialize the serial peripheral. It sets the default parameters for serial
  *  peripheral, and configures its specifieds pins.
@@ -46,6 +54,15 @@ serial_t stdio_uart;
 void serial_init(serial_t *obj, PinName tx, PinName rx)
 {
     uint8_t stdio_config = 0;
+
+#if	DEVICE_SERIAL_ASYNCH
+		XUartLite *xuart = &obj->serial->xuart;
+#else
+		XUartLite *xuart = &obj->xuart;
+#endif
+	
+    XUartLite_Initialize(xuart, XPAR_AXI_UARTLITE_0_DEVICE_ID);
+    XUartLite_Recv(xuart, UARTReceiveBuffer, UART_BUFFER_SIZE);
 
     // For stdio management in platform/mbed_board.c and platform/mbed_retarget.cpp
     if (stdio_config) {
@@ -61,7 +78,13 @@ void serial_init(serial_t *obj, PinName tx, PinName rx)
  */
 void serial_free(serial_t *obj)
 {
-    
+#if	DEVICE_SERIAL_ASYNCH
+		XUartLite *xuart = &obj->serial->xuart;
+#else
+		XUartLite *xuart = &obj->xuart;
+#endif
+	
+    XUartLite_ResetFifos(xuart);
 }
 
 /** Configure the baud rate
@@ -69,9 +92,10 @@ void serial_free(serial_t *obj)
  * @param obj      The serial object
  * @param baudrate The baud rate to be configured
  */
+
 void serial_baud(serial_t *obj, int baudrate)
 {
-    
+    //configured in Vivado Blockdiagram
 }
 
 /** Configure the format. Set the number of bits, parity and the number of stop bits
@@ -83,7 +107,7 @@ void serial_baud(serial_t *obj, int baudrate)
  */
 void serial_format(serial_t *obj, int data_bits, SerialParity parity, int stop_bits)
 {
-    
+    //configured in Vivado Blockdiagram
 }
 
 /** The serial interrupt handler registration
@@ -94,7 +118,7 @@ void serial_format(serial_t *obj, int data_bits, SerialParity parity, int stop_b
  */
 void serial_irq_handler(serial_t *obj, uart_irq_handler handler, uint32_t id)
 {
-    
+	
 }
 
 /** Configure serial interrupt. This function is used for word-approach
@@ -105,7 +129,23 @@ void serial_irq_handler(serial_t *obj, uart_irq_handler handler, uint32_t id)
  */
 void serial_irq_set(serial_t *obj, SerialIrq irq, uint32_t enable)
 {
-    
+#if	DEVICE_SERIAL_ASYNCH
+		XUartLite *xuart = &obj->serial->xuart;
+#else
+		XUartLite *xuart = &obj->xuart;
+#endif
+	
+	  if(irq == TxIrq && enable)
+		{
+			XUartLite_SetSendHandler(xuart, serial_tx_handler, &obj);
+		}
+		else if(irq == RxIrq && enable)
+		{
+			XUartLite_SetRecvHandler(xuart, serial_rx_handler, &obj);
+		}
+		
+		if(enable) XUartLite_EnableInterrupt(xuart);
+		else			 XUartLite_DisableInterrupt(xuart);
 }
 
 /** Get character. This is a blocking call, waiting for a character
@@ -114,7 +154,19 @@ void serial_irq_set(serial_t *obj, SerialIrq irq, uint32_t enable)
  */
 int  serial_getc(serial_t *obj)
 {
-    return 0;
+	uint8_t c = 0;
+#if	DEVICE_SERIAL_ASYNCH
+		XUartLite *xuart = &obj->serial->xuart;
+#else
+		XUartLite *xuart = &obj->xuart;
+#endif
+
+#ifndef SIM_BUILD
+		while(XUartLite_IsReceiveEmpty(xuart->RegBaseAddress));
+#endif
+	
+		XUartLite_Recv(xuart, (uint8_t*)&c, 1);
+    return c;
 }
 
 /** Send a character. This is a blocking call, waiting for a peripheral to be available
@@ -125,7 +177,17 @@ int  serial_getc(serial_t *obj)
  */
 void serial_putc(serial_t *obj, int c)
 {
+#if	DEVICE_SERIAL_ASYNCH
+		XUartLite *xuart = &obj->serial->xuart;
+#else
+		XUartLite *xuart = &obj->xuart;
+#endif
 
+#ifndef SIM_BUILD
+		while(XUartLite_IsTransmitFull(xuart->RegBaseAddress));
+#endif
+	
+		XUartLite_Send(xuart, (uint8_t*)&c, 1);
 }
 
 /** Check if the serial peripheral is readable
@@ -135,7 +197,14 @@ void serial_putc(serial_t *obj, int c)
  */
 int  serial_readable(serial_t *obj)
 {
-    return 0;
+#if	DEVICE_SERIAL_ASYNCH
+		XUartLite *xuart = &obj->serial->xuart;
+#else
+		XUartLite *xuart = &obj->xuart;
+#endif
+	
+		if(XUartLite_IsReceiveEmpty(xuart->RegBaseAddress)) return 0;
+    else 																								return 1;
 }
 
 /** Check if the serial peripheral is writable
@@ -145,7 +214,14 @@ int  serial_readable(serial_t *obj)
  */
 int  serial_writable(serial_t *obj)
 {
-    return 0;
+#if	DEVICE_SERIAL_ASYNCH
+		XUartLite *xuart = &obj->serial->xuart;
+#else
+		XUartLite *xuart = &obj->xuart;
+#endif
+	
+	if(XUartLite_IsTransmitFull(xuart->RegBaseAddress)) return 0;
+	else													 											return 1;
 }
 
 /** Clear the serial peripheral
@@ -154,7 +230,13 @@ int  serial_writable(serial_t *obj)
  */
 void serial_clear(serial_t *obj)
 {
-    
+#if	DEVICE_SERIAL_ASYNCH
+		XUartLite *xuart = &obj->serial->xuart;
+#else
+		XUartLite *xuart = &obj->xuart;
+#endif
+	
+    XUartLite_ResetFifos(xuart);
 }
 
 /** Set the break
@@ -181,7 +263,7 @@ void serial_break_clear(serial_t *obj)
  */
 void serial_pinout_tx(PinName tx)
 {
-    
+    //configured in Vivado Blockdiagram
 }
 
 /** Configure the serial for the flow control. It sets flow control in the hardware
@@ -194,7 +276,7 @@ void serial_pinout_tx(PinName tx)
  */
 void serial_set_flow_control(serial_t *obj, FlowControl type, PinName rxflow, PinName txflow)
 {
-
+		//configured in Vivado Blockdiagram
 }
 
 #if DEVICE_SERIAL_ASYNCH
@@ -285,6 +367,16 @@ void serial_rx_abort_asynch(serial_t *obj)
 }
 
 #endif
+
+void serial_tx_handler(void *CallBackRef, unsigned int EventData)
+{
+	// CallBackRef = serial_t object
+}
+
+void serial_rx_handler(void *CallBackRef, unsigned int EventData)
+{
+  // CallBackRef = serial_t object
+}
 
 #else
 
