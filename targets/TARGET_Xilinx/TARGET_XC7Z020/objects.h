@@ -50,6 +50,7 @@ struct serial_s {
     PinName pin_tx;
     PinName pin_rx;
 	  XUartLite xuart;
+		uint8_t device_id;
 #if DEVICE_SERIAL_ASYNCH
     uint32_t events;
 #endif

@@ -36,10 +36,15 @@
 #include <string.h>
 
 #define UART_BUFFER_SIZE 10
+#define UART_NUM         1 /* minumum number is highest XPAR_AXI_UARTLITE_X_DEVICE_ID + 1 */
 
 int stdio_uart_inited = 0; // used in platform/mbed_board.c and platform/mbed_retarget.cpp
 uint8_t UARTReceiveBuffer[UART_BUFFER_SIZE];
 serial_t stdio_uart;
+
+static uart_irq_handler irq_handler;
+uint32_t serial_irq_ids[UART_NUM] = {0};
+serial_t *serial_objs[UART_NUM] = {0};
 
 void serial_tx_handler(void *CallBackRef, unsigned int EventData);
 void serial_rx_handler(void *CallBackRef, unsigned int EventData);
@@ -56,13 +61,16 @@ void serial_init(serial_t *obj, PinName tx, PinName rx)
     uint8_t stdio_config = 0;
 
 #if	DEVICE_SERIAL_ASYNCH
-		XUartLite *xuart = &obj->serial->xuart;
+		struct serial_s *obj_s = obj->serial;
 #else
-		XUartLite *xuart = &obj->xuart;
+		struct serial_s *obj_s = obj;
 #endif
 	
-    XUartLite_Initialize(xuart, XPAR_AXI_UARTLITE_0_DEVICE_ID);
-    XUartLite_Recv(xuart, UARTReceiveBuffer, UART_BUFFER_SIZE);
+		obj_s->device_id = tx;
+		serial_objs[tx] = obj;
+	
+    XUartLite_Initialize(&obj_s->xuart, tx);
+    XUartLite_Recv(&obj_s->xuart, UARTReceiveBuffer, UART_BUFFER_SIZE);
 
     // For stdio management in platform/mbed_board.c and platform/mbed_retarget.cpp
     if (stdio_config) {
@@ -118,7 +126,15 @@ void serial_format(serial_t *obj, int data_bits, SerialParity parity, int stop_b
  */
 void serial_irq_handler(serial_t *obj, uart_irq_handler handler, uint32_t id)
 {
+#if	DEVICE_SERIAL_ASYNCH
+		struct serial_s *obj_s = obj->serial;
+#else
+		struct serial_s *obj_s = obj;
+#endif
 	
+		irq_handler = handler;
+	
+		serial_irq_ids[obj_s->device_id] = id;
 }
 
 /** Configure serial interrupt. This function is used for word-approach
@@ -144,8 +160,17 @@ void serial_irq_set(serial_t *obj, SerialIrq irq, uint32_t enable)
 			XUartLite_SetRecvHandler(xuart, serial_rx_handler, &obj);
 		}
 		
-		if(enable) XUartLite_EnableInterrupt(xuart);
-		else			 XUartLite_DisableInterrupt(xuart);
+		if(enable) 
+		{
+			XUartLite_EnableInterrupt(xuart);
+			NVIC_SetPriority(UART0_IRQn, 4); // set priority level
+			NVIC_EnableIRQ(UART0_IRQn); // Enable interrupt
+		}
+		else
+		{
+			XUartLite_DisableInterrupt(xuart);
+			NVIC_DisableIRQ(UART0_IRQn);
+		}
 }
 
 /** Get character. This is a blocking call, waiting for a character
@@ -367,15 +392,51 @@ void serial_rx_abort_asynch(serial_t *obj)
 }
 
 #endif
-
+/*
+void UART0_Handler ( void )
+{
+		uint8_t device_id = 0;
+	
+#if	DEVICE_SERIAL_ASYNCH
+		XUartLite *xuart = &serial_objs[device_id]->serial->xuart;
+#else
+		XUartLite *xuart = &serial_objs[device_id]->xuart;
+#endif
+	
+    XUartLite_InterruptHandler(xuart);
+    NVIC_ClearPendingIRQ(UART0_IRQn);
+}
+*/
 void serial_tx_handler(void *CallBackRef, unsigned int EventData)
 {
-	// CallBackRef = serial_t object
+		if(irq_handler != NULL)
+		{
+		#if	DEVICE_SERIAL_ASYNCH
+			struct serial_s *obj_s = CallBackRef->serial;
+		#else
+			struct serial_s *obj_s = CallBackRef;
+		#endif
+			
+			uint8_t id = serial_irq_ids[obj_s->device_id];
+	
+			irq_handler(serial_irq_ids[id], TxIrq);
+		}
 }
 
 void serial_rx_handler(void *CallBackRef, unsigned int EventData)
 {
-  // CallBackRef = serial_t object
+		if(irq_handler != NULL)
+		{
+		#if	DEVICE_SERIAL_ASYNCH
+			struct serial_s *obj_s = CallBackRef->serial;
+		#else
+			struct serial_s *obj_s = CallBackRef;
+		#endif
+			
+			uint8_t id = serial_irq_ids[obj_s->device_id];
+	
+			irq_handler(serial_irq_ids[id], RxIrq);
+		}
 }
 
 #else

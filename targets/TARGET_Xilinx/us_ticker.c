@@ -16,32 +16,60 @@
 #include <stddef.h>
 #include "us_ticker_api.h"
 #include "PeripheralNames.h"
-
+#include "xtmrctr.h"
+#include "xtmrctr_l.h"
+#define TIMER_CNTR_0	 0
 /* HAL us ticker */
+XTmrCtr TimerCounterInst;
+
+void us_ticker_irq_handler_wrapper(void *CallBackRef, u8 TmrCtrNumber);
 
 void us_ticker_init(void)
 {
-
+	XTmrCtr_Initialize(&TimerCounterInst, XPAR_TMRCTR_0_DEVICE_ID);
+	
+	XTmrCtr_SetOptions(&TimerCounterInst, TIMER_CNTR_0,
+				XTC_DOWN_COUNT_OPTION | XTC_AUTO_RELOAD_OPTION);
+	
+	XTmrCtr_SetResetValue(&TimerCounterInst, TIMER_CNTR_0, 0xDEADBEEF);
+	
+	XTmrCtr_Start(&TimerCounterInst, TIMER_CNTR_0);
 }
 
 void us_ticker_free(void)
 {
-
+	XTmrCtr_Stop(&TimerCounterInst, TIMER_CNTR_0);
 }
 
 uint32_t us_ticker_read(void)
 {
-	return 0;
+	return XTmrCtr_GetValue(&TimerCounterInst, TIMER_CNTR_0);
 }
 
 void us_ticker_set_interrupt(timestamp_t timestamp)
 {
+	XTmrCtr_Stop(&TimerCounterInst, TIMER_CNTR_0);
+	
+	XTmrCtr_Initialize(&TimerCounterInst, XPAR_TMRCTR_0_DEVICE_ID);
+	
+	XTmrCtr_SetHandler(&TimerCounterInst, us_ticker_irq_handler_wrapper,
+					   &TimerCounterInst);
+	
+	XTmrCtr_SetOptions(&TimerCounterInst, TIMER_CNTR_0,
+				XTC_DOWN_COUNT_OPTION | XTC_INT_MODE_OPTION | XTC_AUTO_RELOAD_OPTION);
+	
+	XTmrCtr_SetResetValue(&TimerCounterInst, TIMER_CNTR_0, timestamp);
+	
+	XTmrCtr_Start(&TimerCounterInst, TIMER_CNTR_0);
+	NVIC_SetPriority(GPIO0_IRQn, 1); // set priority level
+	NVIC_EnableIRQ(GPIO0_IRQn); // Enable interrupt
 
 }
 
 void us_ticker_disable_interrupt(void)
 {
-
+	XTmrCtr_SetOptions(&TimerCounterInst, TIMER_CNTR_0,
+				XTC_DOWN_COUNT_OPTION | XTC_AUTO_RELOAD_OPTION);
 }
 
 void us_ticker_clear_interrupt(void)
@@ -57,8 +85,21 @@ void us_ticker_fire_interrupt(void)
 const ticker_info_t *us_ticker_get_info(void)
 {
     static const ticker_info_t info = {
-        100e6, // 100 MHz
-        16     // 16 Bit timer (24 Bit is not working)
+        8e6, // 8 MHz
+        32   // 32 Bit timer
     };
     return &info;
+}
+
+void us_ticker_irq_handler_wrapper(void *CallBackRef, u8 TmrCtrNumber)
+{
+	//XTmrCtr *InstancePtr = (XTmrCtr *)CallBackRef;
+	
+	us_ticker_irq_handler();
+}
+
+void GPIO0_Handler ( void )
+{
+	XTmrCtr_InterruptHandler(&TimerCounterInst);
+	NVIC_ClearPendingIRQ(GPIO0_IRQn);
 }
