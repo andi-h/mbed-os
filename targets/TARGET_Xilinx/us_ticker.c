@@ -19,6 +19,7 @@
 #include "xtmrctr.h"
 #include "xtmrctr_l.h"
 #define TIMER_CNTR_0	 0
+extern void taskclass1(void);
 /* HAL us ticker */
 XTmrCtr TimerCounterInst;
 
@@ -26,12 +27,17 @@ void us_ticker_irq_handler_wrapper(void *CallBackRef, u8 TmrCtrNumber);
 
 void us_ticker_init(void)
 {
+	XTmrCtr_Stop(&TimerCounterInst, TIMER_CNTR_0);
+	
 	XTmrCtr_Initialize(&TimerCounterInst, XPAR_TMRCTR_0_DEVICE_ID);
 	
 	XTmrCtr_SetOptions(&TimerCounterInst, TIMER_CNTR_0,
-				XTC_DOWN_COUNT_OPTION | XTC_AUTO_RELOAD_OPTION);
+				XTC_DOWN_COUNT_OPTION | XTC_INT_MODE_OPTION | XTC_AUTO_RELOAD_OPTION);
 	
-	XTmrCtr_SetResetValue(&TimerCounterInst, TIMER_CNTR_0, 0xDEADBEEF);
+	//mrCtr_SetResetValue(&TimerCounterInst, TIMER_CNTR_0, 0xDEADBEEF);
+	XTmrCtr_SetResetValue(&TimerCounterInst, TIMER_CNTR_0, 0x00F42400);
+	
+	XTmrCtr_Reset(&TimerCounterInst, TIMER_CNTR_0);
 	
 	XTmrCtr_Start(&TimerCounterInst, TIMER_CNTR_0);
 }
@@ -59,6 +65,8 @@ void us_ticker_set_interrupt(timestamp_t timestamp)
 				XTC_DOWN_COUNT_OPTION | XTC_INT_MODE_OPTION | XTC_AUTO_RELOAD_OPTION);
 	
 	XTmrCtr_SetResetValue(&TimerCounterInst, TIMER_CNTR_0, timestamp);
+	
+	XTmrCtr_Reset(&TimerCounterInst, TIMER_CNTR_0);
 	
 	XTmrCtr_Start(&TimerCounterInst, TIMER_CNTR_0);
 	NVIC_SetPriority(GPIO0_IRQn, 1); // set priority level
@@ -100,6 +108,16 @@ void us_ticker_irq_handler_wrapper(void *CallBackRef, u8 TmrCtrNumber)
 
 void GPIO0_Handler ( void )
 {
-	XTmrCtr_InterruptHandler(&TimerCounterInst);
+	uint32_t ControlStatusReg = XTmrCtr_ReadReg(TimerCounterInst.BaseAddress,
+						   TIMER_CNTR_0,
+						   XTC_TCSR_OFFSET);
+	//XTmrCtr_InterruptHandler(&TimerCounterInst);
+	XTmrCtr_WriteReg(TimerCounterInst.BaseAddress,
+						 TIMER_CNTR_0,
+						 XTC_TCSR_OFFSET,
+						 ControlStatusReg |
+						 XTC_CSR_INT_OCCURED_MASK);
 	NVIC_ClearPendingIRQ(GPIO0_IRQn);
+	
+	taskclass1();
 }
